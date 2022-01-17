@@ -1,0 +1,13 @@
+{
+	"name": "afterlogic/aurora-module-dav-data-migration",
+	"type": "aurora-module",
+	"require": {
+		"php": ">=5.4.0",
+		"afterlogic/aurora-framework": "~0.10.0",
+		"afterlogic/dav": "~3.0.0",
+		"afterlogic/sabre-dav": "3.2.*"
+	},
+	"extra": {
+		"installer-name": "DavDataMigration"
+	}
+}
