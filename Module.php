@@ -220,7 +220,6 @@ class Module extends \Aurora\System\Module\AbstractModule
 
 						$oUser->setExtendedProp($this->GetName() . '::Migrated', true);
 						$oUser->save();
-
 					}
 				}
 			}
