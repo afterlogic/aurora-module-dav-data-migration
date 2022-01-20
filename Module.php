@@ -148,6 +148,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 				$aCalendars = $this->client->getCalendars($calHomeSet);
 				
 				foreach ($aCalendars as $calendar) {
+		
 					list(, $sCalendarId) = split($calendar->Id);
 					$oCalendar = $oCalendarDecorator->GetCalendar(
 						$oAccount->IdUser, 
@@ -164,6 +165,15 @@ class Module extends \Aurora\System\Module\AbstractModule
 							$calendar->Color, 
 							$sCalendarId
 						);
+						if (!empty($calendar->Shares)) {
+							$oCalendarDecorator->UpdateCalendarShare(
+								$oAccount->IdUser, 
+								$sCalendarId, 
+								false, 
+								\json_encode($calendar->Shares)
+							);
+						}
+						
 					} else {
 						$creationResult = true;
 					}
@@ -198,6 +208,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 	public function Migrate($Account)
 	{
 		$this->getClient($Account);
+		$o = $this->client->testConnection();
 		$sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
 		$this->migrateContacts($sCurrentPrincipalUri, $Account);
 		$this->migrateCalendars($sCurrentPrincipalUri, $Account);
@@ -215,7 +226,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 	//				$oAccount = MailModule::Decorator()->GetAccountByEmail($aArgs['IncomingLogin'], $aArgs['UserId']);
 					if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
 						$prev = Api::skipCheckUserRole(true);
-						$this->Migrate($oAccount);
+//						$this->Migrate($oAccount);
 						Api::skipCheckUserRole($prev);
 
 						$oUser->setExtendedProp($this->GetName() . '::Migrated', true);
