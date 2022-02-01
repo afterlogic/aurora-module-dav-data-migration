@@ -7,6 +7,7 @@
 
 namespace Aurora\Modules\DavDataMigration;
 
+use Afterlogic\DAV\Constants;
 use Afterlogic\DAV\Server;
 use Aurora\Api;
 use Aurora\Modules\Calendar\Module as CalendarModule;
@@ -95,38 +96,60 @@ class Module extends \Aurora\System\Module\AbstractModule
 				foreach ($aBooks as $key => $props) {
 					if ($props['{DAV:}resourcetype']->is('{'.\Sabre\CardDAV\Plugin::NS_CARDDAV.'}addressbook')) {
 						list(, $sAddressBookId) = split($key);
-						$oAddressBook = ContactsModule::Decorator()->GetAddressBook(
-							$oAccount->IdUser, 
-							$sAddressBookId
-						);
 
-						if (!$oAddressBook) {
-							ContactsModule::Decorator()->CreateAddressBook(
-								$props['{DAV:}displayname'],
-								$oAccount->IdUser, 
-								$sAddressBookId
-							);
+						$bIsDefault = false;
+						if ($sAddressBookId === 'default') {
+							
+							$bIsDefault = true;
+
+						} else {
+
 							$oAddressBook = ContactsModule::Decorator()->GetAddressBook(
 								$oAccount->IdUser, 
 								$sAddressBookId
 							);
+
+							if (!$oAddressBook) {
+								ContactsModule::Decorator()->CreateAddressBook(
+									$props['{DAV:}displayname'],
+									$oAccount->IdUser, 
+									$sAddressBookId
+								);
+								$oAddressBook = ContactsModule::Decorator()->GetAddressBook(
+									$oAccount->IdUser, 
+									$sAddressBookId
+								);
+							}
 						}
 
-						$aVCards = $this->client->GetVcards($key);
+						$aVCardsInfo = $this->client->GetVcardsInfo($key);
+						$aVCardUrls = [];
+						foreach ($aVCardsInfo as $aVCardInfo) {
+							$sHref = $aVCardInfo['href'];
+							$aVCardUrls[] = $key . $sHref;
+						}
 
+						$aVCards = $this->client->GetVcards($key, $aVCardUrls);
 						foreach ($aVCards as $aVCard) {
 							$sHref = $aVCard['href'];
+							$aVCardUrls[] = $key . $sHref;
 							$aPathInfo = pathinfo($sHref);
 							$sUUID = $aPathInfo['filename'];
-							$oContact = Contact::where('IdUser', $oAccount->IdUser)
-								->where('UUID', $sUUID)
-								->where('AddressBookId', $oAddressBook->Id)
-								->first();
+							$oQuery = Contact::where('IdUser', $oAccount->IdUser)
+								->where('UUID', $sUUID);
+							if (!$bIsDefault) {
+								$oQuery = $oQuery->where('AddressBookId', $oAddressBook->Id);
+							}
+							$oContact = $oQuery->first();
 
 							if (!isset($oContact) || empty($oContact)) {
 								$oVCard = Reader::read($aVCard['data']);
 								$aContactData = Helper::GetContactDataFromVcard($oVCard, $sUUID);
-								$aContactData['Storage'] = StorageType::AddressBook . $oAddressBook->Id;
+								if ($bIsDefault) {
+									$aContactData['Storage'] = StorageType::Personal;
+								} else {
+									$aContactData['Storage'] = StorageType::AddressBook . $oAddressBook->Id;
+								}
 								ContactsModule::Decorator()->CreateContact($aContactData, $oAccount->IdUser);
 							}
 						}
@@ -134,6 +157,23 @@ class Module extends \Aurora\System\Module\AbstractModule
 				}
 			}
 		}
+	}
+
+	protected function getDefaultCalendar($iUserId) {
+		
+		$mResult = false;
+		$oCalendarDecorator = CalendarModule::Decorator();
+		if ($oCalendarDecorator) {
+			$aCalendars = $oCalendarDecorator->GetCalendars($iUserId);
+			foreach ($aCalendars['Calendars'] as $oCalendar) {
+				if (\substr($oCalendar->Id, 0, \strlen(Constants::CALENDAR_DEFAULT_UUID)) === Constants::CALENDAR_DEFAULT_UUID) {
+					$mResult = $oCalendar;
+					break;
+				}
+			}
+		}
+
+		return $mResult;
 	}
 	
 	protected function migrateCalendars($sPrincipalUri, $oAccount) {
@@ -148,12 +188,20 @@ class Module extends \Aurora\System\Module\AbstractModule
 				$aCalendars = $this->client->getCalendars($calHomeSet);
 				
 				foreach ($aCalendars as $calendar) {
-		
+
 					list(, $sCalendarId) = split($calendar->Id);
-					$oCalendar = $oCalendarDecorator->GetCalendar(
-						$oAccount->IdUser, 
-						$sCalendarId
-					);
+
+					if ($sCalendarId === 'default') {
+						$oCalendar = $this->getDefaultCalendar($oAccount->IdUser);
+						if ($oCalendar) {
+							$sCalendarId = $oCalendar->Id;
+						}
+					} else {
+						$oCalendar = $oCalendarDecorator->GetCalendar(
+							$oAccount->IdUser, 
+							$sCalendarId
+						);
+					}
 
 					$creationResult = false;
 
@@ -179,8 +227,9 @@ class Module extends \Aurora\System\Module\AbstractModule
 					}
 
 					if ($creationResult) {
-						Server::setUser(Api::getUserPublicIdById($oAccount->IdUser));
-						$vCalendar = Server::getNodeForPath($calendar->Id);
+						$sUserPublicId = Api::getUserPublicIdById($oAccount->IdUser);
+						Server::setUser($sUserPublicId);
+						$vCalendar = Server::getNodeForPath('calendars/' . $sCalendarId);
 						if ($vCalendar) {
 							$aEvents = $this->client->getEvents($calendar->Id);
 							foreach ($aEvents as $aEvent) {
@@ -208,10 +257,13 @@ class Module extends \Aurora\System\Module\AbstractModule
 	public function Migrate($Account)
 	{
 		$this->getClient($Account);
-		$o = $this->client->testConnection();
-		$sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
-		$this->migrateContacts($sCurrentPrincipalUri, $Account);
-		$this->migrateCalendars($sCurrentPrincipalUri, $Account);
+		try {
+			$sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
+			$this->migrateContacts($sCurrentPrincipalUri, $Account);
+			$this->migrateCalendars($sCurrentPrincipalUri, $Account);
+		} catch (\Exception $oEx) {
+			Api::LogException($oEx);
+		}
 	}
 
 	public function onAfterLogin($aArgs, &$mResult)
@@ -226,7 +278,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 	//				$oAccount = MailModule::Decorator()->GetAccountByEmail($aArgs['IncomingLogin'], $aArgs['UserId']);
 					if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
 						$prev = Api::skipCheckUserRole(true);
-//						$this->Migrate($oAccount);
+						$this->Migrate($oAccount);
 						Api::skipCheckUserRole($prev);
 
 						$oUser->setExtendedProp($this->GetName() . '::Migrated', true);
