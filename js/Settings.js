@@ -19,7 +19,6 @@ module.exports = {
 		var appDataSection = appData['%ModuleName%'];
 
 		if (!_.isEmpty(appDataSection)) {
-			console.log('oAppDataSection.Migrated', appDataSection.Migrated);
 			this.Migrated = Types.pBool(appDataSection.Migrated, this.Migrated);
 		}
 	}
