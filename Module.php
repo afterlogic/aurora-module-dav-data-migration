@@ -129,28 +129,33 @@ class Module extends \Aurora\System\Module\AbstractModule
 							$aVCardUrls[] = $key . $sHref;
 						}
 
-						$aVCards = $this->client->GetVcards($key, $aVCardUrls);
-						foreach ($aVCards as $aVCard) {
-							$sHref = $aVCard['href'];
-							$aVCardUrls[] = $key . $sHref;
-							$aPathInfo = pathinfo($sHref);
-							$sUUID = $aPathInfo['filename'];
-							$oQuery = Contact::where('IdUser', $oAccount->IdUser)
-								->where('UUID', $sUUID);
-							if (!$bIsDefault) {
-								$oQuery = $oQuery->where('AddressBookId', $oAddressBook->Id);
-							}
-							$oContact = $oQuery->first();
+//						$aVCards = $this->client->GetVcards($key, $aVCardUrls);
 
-							if (!isset($oContact) || empty($oContact)) {
-								$oVCard = Reader::read($aVCard['data']);
-								$aContactData = Helper::GetContactDataFromVcard($oVCard, $sUUID);
-								if ($bIsDefault) {
-									$aContactData['Storage'] = StorageType::Personal;
-								} else {
-									$aContactData['Storage'] = StorageType::AddressBook . $oAddressBook->Id;
+						$aChunks = array_chunk($aVCardUrls, 300);
+						foreach ($aChunks as $aVCardUrls) {
+							$aVCards = $this->client->GetVcards($key, $aVCardUrls);
+							foreach ($aVCards as $aVCard) {
+								$sHref = $aVCard['href'];
+								$aVCardUrls[] = $key . $sHref;
+								$aPathInfo = pathinfo($sHref);
+								$sUUID = $aPathInfo['filename'];
+								$oQuery = Contact::where('IdUser', $oAccount->IdUser)
+									->where('UUID', $sUUID);
+								if (!$bIsDefault) {
+									$oQuery = $oQuery->where('AddressBookId', $oAddressBook->Id);
 								}
-								ContactsModule::Decorator()->CreateContact($aContactData, $oAccount->IdUser);
+								$oContact = $oQuery->first();
+	
+								if (!isset($oContact) || empty($oContact)) {
+									$oVCard = Reader::read($aVCard['data']);
+									$aContactData = Helper::GetContactDataFromVcard($oVCard, $sUUID);
+									if ($bIsDefault) {
+										$aContactData['Storage'] = StorageType::Personal;
+									} else {
+										$aContactData['Storage'] = StorageType::AddressBook . $oAddressBook->Id;
+									}
+									ContactsModule::Decorator()->CreateContact($aContactData, $oAccount->IdUser);
+								}
 							}
 						}
 					}
@@ -251,19 +256,52 @@ class Module extends \Aurora\System\Module\AbstractModule
 	 * @ignore
 	 */
 	public function init() {
-		$this->subscribeEvent('Core::Login::after', [$this, 'onAfterLogin']);
+//		$this->subscribeEvent('Core::Login::after', [$this, 'onAfterLogin']);
 	}
 
-	public function Migrate($Account)
+	public function GetSettings()
 	{
-		$this->getClient($Account);
-		try {
-			$sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
-			$this->migrateContacts($sCurrentPrincipalUri, $Account);
-			$this->migrateCalendars($sCurrentPrincipalUri, $Account);
-		} catch (\Exception $oEx) {
-			Api::LogException($oEx);
+		\Aurora\System\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::NormalUser);
+		$mResult = [
+			'Migrated' => false
+		];
+		$oUser = Api::getAuthenticatedUser();
+		if ($oUser && $oUser->{$this->GetName() . '::Migrated'}) {
+			$mResult['Migrated'] = true;
 		}
+
+		return $mResult;
+	}
+
+	public function Migrate()
+	{
+		$mResult = false;
+
+		$oUser = Api::getAuthenticatedUser();
+		if ($oUser) {
+			$oAccount = CoreModule::getInstance()->GetAccountUsedToAuthorize($oUser->PublicId);
+
+			if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
+				$this->getClient($oAccount);
+				try {
+					$sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
+					
+					$prev = Api::skipCheckUserRole(true);
+
+					$this->migrateContacts($sCurrentPrincipalUri, $oAccount);
+					$this->migrateCalendars($sCurrentPrincipalUri, $oAccount);
+
+					Api::skipCheckUserRole($prev);
+					$oUser->setExtendedProp($this->GetName() . '::Migrated', true);
+					$oUser->save();
+					$mResult = true;
+				} catch (\Exception $oEx) {
+					Api::LogException($oEx);
+				}
+			}
+		}
+
+		return $mResult;
 	}
 
 	public function onAfterLogin($aArgs, &$mResult)
@@ -277,12 +315,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 					$oAccount = CoreModule::Decorator()->GetAccountUsedToAuthorize($oUser->PublicId);
 	//				$oAccount = MailModule::Decorator()->GetAccountByEmail($aArgs['IncomingLogin'], $aArgs['UserId']);
 					if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
-						$prev = Api::skipCheckUserRole(true);
 						$this->Migrate($oAccount);
-						Api::skipCheckUserRole($prev);
-
-						$oUser->setExtendedProp($this->GetName() . '::Migrated', true);
-						$oUser->save();
 					}
 				}
 			}
