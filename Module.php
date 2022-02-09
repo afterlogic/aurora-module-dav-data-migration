@@ -281,7 +281,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 					try {
 						$sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
 					} catch (\Sabre\HTTP\ClientHttpException $oEx) {
-						Api::Log('Can\'t connect to the following DAV server: caldav.soveroutn.net');
+						Api::Log('Can\'t connect to the following DAV server: ' . $this->getConfig('DavServerUrl'));
 
 						return false;
 					}
