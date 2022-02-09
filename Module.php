@@ -122,12 +122,6 @@ class Module extends \Aurora\System\Module\AbstractModule
 							}
 						}
 
-						$oQuery = Contact::where('IdUser', $oAccount->IdUser);
-						if (!$bIsDefault) {
-							$oQuery = $oQuery->where('AddressBookId', $oAddressBook->Id);
-						}
-						$aUuids = $oQuery->select('UUID')->pluck('UUID')->toArray();
-
 						$aVCardsInfo = $this->client->GetVcardsInfo($key);
 						$aVCardUrls = [];
 						foreach ($aVCardsInfo as $aVCardInfo) {
@@ -147,9 +141,14 @@ class Module extends \Aurora\System\Module\AbstractModule
 								$aVCardUrls[] = $key . $sHref;
 								$aPathInfo = pathinfo($sHref);
 								$sUUID = $aPathInfo['filename'];
-
-								if (!in_array($sUUID, $aUuids)) {
-
+								$oQuery = Contact::where('IdUser', $oAccount->IdUser)
+									->where('UUID', $sUUID);
+								if (!$bIsDefault) {
+									$oQuery = $oQuery->where('AddressBookId', $oAddressBook->Id);
+								}
+								$iContactsCount = $oQuery->count();
+	
+								if ($iContactsCount === 0) {
 									$oVCard = Reader::read($aVCard['data']);
 									$aContactData = Helper::GetContactDataFromVcard($oVCard, $sUUID);
 
