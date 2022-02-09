@@ -9,7 +9,9 @@ module.exports = function (appData) {
 		App = require('%PathToCoreWebclientModule%/js/App.js'),
 		Screens = require('%PathToCoreWebclientModule%/js/Screens.js'),
 
-		Settings = require('modules/%ModuleName%/js/Settings.js')
+		Settings = require('modules/%ModuleName%/js/Settings.js'),
+
+		migrationsCount = 0
 	;
 
 	Settings.init(appData);
@@ -17,8 +19,9 @@ module.exports = function (appData) {
 	if (App.isUserNormalOrTenant()) {
 		function startMigration () {
 			Screens.showLoading(TextUtils.i18n('%MODULENAME%/INFO_DATA_MIGRATION'));
+			migrationsCount++;
 			Ajax.send('%ModuleName%', 'Migrate', {}, function (response, request, status) {
-				if (status === 503) {
+				if (migrationsCount < 100 && typeof status === 'number' && status >= 500 && status < 600) {
 					startMigration();
 				} else {
 					Screens.hideLoading();
