@@ -249,15 +249,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 		}
 	}
 
-	/***** private functions *****/
-	/**
-	 * Initializes Module.
-	 *
-	 * @ignore
-	 */
-	public function init() {
-//		$this->subscribeEvent('Core::Login::after', [$this, 'onAfterLogin']);
-	}
+	public function init() {}
 
 	public function GetSettings()
 	{
@@ -278,47 +270,38 @@ class Module extends \Aurora\System\Module\AbstractModule
 		$mResult = false;
 
 		$oUser = Api::getAuthenticatedUser();
-		if ($oUser) {
+		if ($oUser && !$oUser->{$this->GetName() . '::Migrated'}) {
 			$oAccount = CoreModule::getInstance()->GetAccountUsedToAuthorize($oUser->PublicId);
 
 			if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
-				$this->getClient($oAccount);
-				try {
-					$sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
-					
-					$prev = Api::skipCheckUserRole(true);
+				if (empty($this->getConfig('DavServerUrl', ''))) {
+					Api::Log('The DavDataMigration module is not configured properly');
+				} else {
+					$this->getClient($oAccount);
+					try {
+						$sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
+					} catch (\Sabre\HTTP\ClientHttpException $oEx) {
+						Api::Log('Can\'t connect to the following DAV server: caldav.soveroutn.net');
 
-					$this->migrateContacts($sCurrentPrincipalUri, $oAccount);
-					$this->migrateCalendars($sCurrentPrincipalUri, $oAccount);
+						return false;
+					}
+					try {
+						$prev = Api::skipCheckUserRole(true);
 
-					Api::skipCheckUserRole($prev);
-					$oUser->setExtendedProp($this->GetName() . '::Migrated', true);
-					$oUser->save();
-					$mResult = true;
-				} catch (\Exception $oEx) {
-					Api::LogException($oEx);
+						$this->migrateContacts($sCurrentPrincipalUri, $oAccount);
+						$this->migrateCalendars($sCurrentPrincipalUri, $oAccount);
+
+						Api::skipCheckUserRole($prev);
+						$oUser->setExtendedProp($this->GetName() . '::Migrated', true);
+						$oUser->save();
+						$mResult = true;
+					} catch (\Exception $oEx) {
+						Api::LogException($oEx);
+					}
 				}
 			}
 		}
 
 		return $mResult;
-	}
-
-	public function onAfterLogin($aArgs, &$mResult)
-	{
-		if ($mResult) {
-//			$oUser = CoreModule::Decorator()->GetUserUnchecked($aArgs['UserId']);
-			$oUser = Api::getAuthenticatedUser();
-			if ($oUser) {
-				$bMigrated = $oUser->getExtendedProp($this->GetName() . '::Migrated', false);
-				if (!$bMigrated) {
-					$oAccount = CoreModule::Decorator()->GetAccountUsedToAuthorize($oUser->PublicId);
-	//				$oAccount = MailModule::Decorator()->GetAccountByEmail($aArgs['IncomingLogin'], $aArgs['UserId']);
-					if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
-						$this->Migrate($oAccount);
-					}
-				}
-			}
-		}
 	}
 }
