@@ -122,6 +122,12 @@ class Module extends \Aurora\System\Module\AbstractModule
 							}
 						}
 
+						$oQuery = Contact::where('IdUser', $oAccount->IdUser);
+						if (!$bIsDefault) {
+							$oQuery = $oQuery->where('AddressBookId', $oAddressBook->Id);
+						}
+						$aUuids = $oQuery->select('UUID')->pluck('UUID')->toArray();
+
 						$aVCardsInfo = $this->client->GetVcardsInfo($key);
 						$aVCardUrls = [];
 						foreach ($aVCardsInfo as $aVCardInfo) {
@@ -131,29 +137,24 @@ class Module extends \Aurora\System\Module\AbstractModule
 
 //						$aVCards = $this->client->GetVcards($key, $aVCardUrls);
 
-						$aChunks = array_chunk($aVCardUrls, 300);
+						$aChunks = array_chunk($aVCardUrls, 200);
 						foreach ($aChunks as $aVCardUrls) {
+
 							$aVCards = $this->client->GetVcards($key, $aVCardUrls);
 							foreach ($aVCards as $aVCard) {
+
 								$sHref = $aVCard['href'];
 								$aVCardUrls[] = $key . $sHref;
 								$aPathInfo = pathinfo($sHref);
 								$sUUID = $aPathInfo['filename'];
-								$oQuery = Contact::where('IdUser', $oAccount->IdUser)
-									->where('UUID', $sUUID);
-								if (!$bIsDefault) {
-									$oQuery = $oQuery->where('AddressBookId', $oAddressBook->Id);
-								}
-								$oContact = $oQuery->first();
-	
-								if (!isset($oContact) || empty($oContact)) {
+
+								if (!in_array($sUUID, $aUuids)) {
+
 									$oVCard = Reader::read($aVCard['data']);
 									$aContactData = Helper::GetContactDataFromVcard($oVCard, $sUUID);
-									if ($bIsDefault) {
-										$aContactData['Storage'] = StorageType::Personal;
-									} else {
-										$aContactData['Storage'] = StorageType::AddressBook . $oAddressBook->Id;
-									}
+
+									$aContactData['Storage'] = $bIsDefault ? StorageType::Personal : StorageType::AddressBook . $oAddressBook->Id;
+
 									ContactsModule::Decorator()->CreateContact($aContactData, $oAccount->IdUser);
 								}
 							}
@@ -288,8 +289,9 @@ class Module extends \Aurora\System\Module\AbstractModule
 					try {
 						$prev = Api::skipCheckUserRole(true);
 
-						$this->migrateContacts($sCurrentPrincipalUri, $oAccount);
 						$this->migrateCalendars($sCurrentPrincipalUri, $oAccount);
+
+						$this->migrateContacts($sCurrentPrincipalUri, $oAccount);
 
 						Api::skipCheckUserRole($prev);
 						$oUser->setExtendedProp($this->GetName() . '::Migrated', true);
