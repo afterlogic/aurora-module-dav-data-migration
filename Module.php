@@ -17,9 +17,12 @@ use Aurora\Modules\Contacts\Models\Contact;
 use Aurora\Modules\Contacts\Module as ContactsModule;
 use Aurora\Modules\Core\Module as CoreModule;
 use Aurora\Modules\Dav\Client;
+use Aurora\Modules\DavContacts\Module as DavContactsModule;
 use Aurora\Modules\Mail\Models\MailAccount;
 use Aurora\Modules\Mail\Module as MailModule;
+use Illuminate\Support\Facades\DB;
 use Sabre\VObject\Reader;
+use \Illuminate\Database\Capsule\Manager as Capsule;
 
 use function Sabre\Uri\split;
 
@@ -100,7 +103,21 @@ class Module extends \Aurora\System\Module\AbstractModule
 						$bIsDefault = false;
 						if ($sAddressBookId === 'default') {
 							
+							$sAddressBookId = \Afterlogic\DAV\Constants::ADDRESSBOOK_DEFAULT_NAME;
 							$bIsDefault = true;
+
+							$oAddressBook = DavContactsModule::Decorator()->getManager()->getAddressBook(
+								$oAccount->IdUser, 
+								$sAddressBookId
+							);
+
+							if (!$oAddressBook) {
+								DavContactsModule::Decorator()->getManager()->createAddressBook(
+									$oAccount->IdUser, 
+									$sAddressBookId,
+									\Afterlogic\DAV\Constants::ADDRESSBOOK_DEFAULT_DISPLAY_NAME
+								);
+							}
 
 						} else {
 
@@ -146,15 +163,57 @@ class Module extends \Aurora\System\Module\AbstractModule
 								if (!$bIsDefault) {
 									$oQuery = $oQuery->where('AddressBookId', $oAddressBook->Id);
 								}
-								$iContactsCount = $oQuery->count();
-	
-								if ($iContactsCount === 0) {
+								
+								if (!$oQuery->exists()) {
+
 									$oVCard = Reader::read($aVCard['data']);
 									$aContactData = Helper::GetContactDataFromVcard($oVCard, $sUUID);
 
 									$aContactData['Storage'] = $bIsDefault ? StorageType::Personal : StorageType::AddressBook . $oAddressBook->Id;
 
-									ContactsModule::Decorator()->CreateContact($aContactData, $oAccount->IdUser);
+//									ContactsModule::Decorator()->CreateContact($aContactData, $oAccount->IdUser);
+									$oUser = Api::getAuthenticatedUser();
+									$oNewContact = new Contact();
+									$oNewContact->IdUser = $oUser->Id;
+									$oNewContact->IdTenant = $oUser->IdTenant;
+									$oNewContact->populate($aContactData, true);
+
+									$bCreated = false;
+
+									Capsule::schema()->getConnection()->beginTransaction();
+
+									$oQuery = Contact::where('IdUser', $oNewContact->IdUser)
+										->where('UUID', $sUUID);
+					
+									if (!$oNewContact->Storage === StorageType::AddressBook) {
+										$oQuery = $oQuery->where('AddressBookId', $oNewContact->AddressBookId);
+									}
+									$oContact = $oQuery->lockForUpdate()->first();
+									if (!$oContact) {
+										$oNewContact->DateModified = date('Y-m-d H:i:s');
+										$oNewContact->calculateETag();
+										$bCreated = $oNewContact->save();
+										if ($bCreated) {
+											$oNewContact->addGroups(
+												isset($aContactData['GroupUUIDs']) ? $aContactData['GroupUUIDs'] : null,
+												isset($aContactData['GroupNames']) ? $aContactData['GroupNames'] : null,
+												true
+											);
+
+										}
+									}
+
+									Capsule::schema()->getConnection()->commit();
+
+									if ($bCreated) {
+										$oAddressBook = DavContactsModule::Decorator()->getManager()->getAddressBook(
+											$oAccount->IdUser, 
+											$sAddressBookId
+										);
+										if ($oAddressBook) {
+											$oAddressBook->createFile($oContact->UUID . '.vcf', $aVCard['data']);
+										}
+									}
 								}
 							}
 						}
@@ -249,7 +308,9 @@ class Module extends \Aurora\System\Module\AbstractModule
 		}
 	}
 
-	public function init() {}
+	public function init() 
+	{
+	}
 
 	public function GetSettings()
 	{
@@ -271,6 +332,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 
 		$oUser = Api::getAuthenticatedUser();
 		if ($oUser && !$oUser->{$this->GetName() . '::Migrated'}) {
+
 			$oAccount = CoreModule::getInstance()->GetAccountUsedToAuthorize($oUser->PublicId);
 
 			if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
