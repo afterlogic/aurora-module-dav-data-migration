@@ -205,13 +205,13 @@ class Module extends \Aurora\System\Module\AbstractModule
 
 									Capsule::schema()->getConnection()->commit();
 
-									if ($bCreated && $oContact) {
+									if ($bCreated && $oNewContact) {
 										$oAddressBook = DavContactsModule::Decorator()->getManager()->getAddressBook(
 											$oAccount->IdUser, 
 											$sAddressBookId
 										);
 										if ($oAddressBook) {
-											$oAddressBook->createFile($oContact->UUID . '.vcf', $aVCard['data']);
+											$oAddressBook->createFile($oNewContact->UUID . '.vcf', $aVCard['data']);
 										}
 									}
 								}
