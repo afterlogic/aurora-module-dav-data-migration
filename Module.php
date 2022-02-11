@@ -99,7 +99,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 				foreach ($aBooks as $key => $props) {
 					if ($props['{DAV:}resourcetype']->is('{'.\Sabre\CardDAV\Plugin::NS_CARDDAV.'}addressbook')) {
 						list(, $sAddressBookId) = split($key);
-
+						$sAddressBookId = rawurldecode($sAddressBookId);
 						$bIsDefault = false;
 						if ($sAddressBookId === 'default') {
 							
@@ -205,7 +205,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 
 									Capsule::schema()->getConnection()->commit();
 
-									if ($bCreated) {
+									if ($bCreated && $oContact) {
 										$oAddressBook = DavContactsModule::Decorator()->getManager()->getAddressBook(
 											$oAccount->IdUser, 
 											$sAddressBookId
@@ -254,7 +254,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 				foreach ($aCalendars as $calendar) {
 
 					list(, $sCalendarId) = split($calendar->Id);
-
+					$sCalendarId = rawurldecode($sCalendarId);
 					if ($sCalendarId === 'default') {
 						$oCalendar = $this->getDefaultCalendar($oAccount->IdUser);
 						if ($oCalendar) {
