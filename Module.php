@@ -139,6 +139,11 @@ class Module extends \Aurora\System\Module\AbstractModule
 							}
 						}
 
+						$oDavAddressBook = DavContactsModule::Decorator()->getManager()->getAddressBook(
+							$oAccount->IdUser, 
+							$sAddressBookId
+						);
+
 						$aVCardsInfo = $this->client->GetVcardsInfo($key);
 						$aVCardUrls = [];
 						foreach ($aVCardsInfo as $aVCardInfo) {
@@ -205,14 +210,8 @@ class Module extends \Aurora\System\Module\AbstractModule
 
 									Capsule::schema()->getConnection()->commit();
 
-									if ($bCreated && $oNewContact) {
-										$oAddressBook = DavContactsModule::Decorator()->getManager()->getAddressBook(
-											$oAccount->IdUser, 
-											$sAddressBookId
-										);
-										if ($oAddressBook) {
-											$oAddressBook->createFile($oNewContact->UUID . '.vcf', $aVCard['data']);
-										}
+									if ($bCreated && $oNewContact && $oDavAddressBook) {
+										$oDavAddressBook->createFile($oNewContact->UUID . '.vcf', $aVCard['data']);
 									}
 								}
 							}
