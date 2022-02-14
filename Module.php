@@ -112,13 +112,14 @@ class Module extends \Aurora\System\Module\AbstractModule
 							);
 
 							if (!$oAddressBook) {
-								DavContactsModule::Decorator()->getManager()->createAddressBook(
-									$oAccount->IdUser, 
-									$sAddressBookId,
-									\Afterlogic\DAV\Constants::ADDRESSBOOK_DEFAULT_DISPLAY_NAME
-								);
+								try {
+									DavContactsModule::Decorator()->getManager()->createAddressBook(
+										$oAccount->IdUser, 
+										$sAddressBookId,
+										\Afterlogic\DAV\Constants::ADDRESSBOOK_DEFAULT_DISPLAY_NAME
+									);
+								} catch (\PDOException $oEx) {}							
 							}
-
 						} else {
 
 							$oAddressBook = ContactsModule::Decorator()->GetAddressBook(
@@ -127,11 +128,14 @@ class Module extends \Aurora\System\Module\AbstractModule
 							);
 
 							if (!$oAddressBook) {
-								ContactsModule::Decorator()->CreateAddressBook(
-									$props['{DAV:}displayname'],
-									$oAccount->IdUser, 
-									$sAddressBookId
-								);
+								try {
+									ContactsModule::Decorator()->CreateAddressBook(
+										$props['{DAV:}displayname'],
+										$oAccount->IdUser, 
+										$sAddressBookId
+									);
+								} catch (\PDOException $oEx) {}	
+								
 								$oAddressBook = ContactsModule::Decorator()->GetAddressBook(
 									$oAccount->IdUser, 
 									$sAddressBookId
@@ -211,7 +215,9 @@ class Module extends \Aurora\System\Module\AbstractModule
 									Capsule::schema()->getConnection()->commit();
 
 									if ($bCreated && $oNewContact && $oDavAddressBook) {
-										$oDavAddressBook->createFile($oNewContact->UUID . '.vcf', $aVCard['data']);
+										try {
+											$oDavAddressBook->createFile($oNewContact->UUID . '.vcf', $aVCard['data']);
+										} catch (\PDOException $oEx) {}
 									}
 								}
 							}
