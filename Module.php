@@ -201,6 +201,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 									if (!$oContact) {
 										$oNewContact->DateModified = date('Y-m-d H:i:s');
 										$oNewContact->calculateETag();
+										$oNewContact->setExtendedProp('DavContacts::UID', $sUUID);
 										$bCreated = $oNewContact->save();
 										if ($bCreated) {
 											$oNewContact->addGroups(
