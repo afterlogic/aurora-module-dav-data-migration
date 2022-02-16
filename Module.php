@@ -14,6 +14,7 @@ use Aurora\Modules\Calendar\Module as CalendarModule;
 use Aurora\Modules\Contacts\Classes\VCard\Helper;
 use Aurora\Modules\Contacts\Enums\StorageType;
 use Aurora\Modules\Contacts\Models\Contact;
+use Aurora\Modules\Contacts\Models\CTag;
 use Aurora\Modules\Contacts\Module as ContactsModule;
 use Aurora\Modules\Core\Module as CoreModule;
 use Aurora\Modules\Dav\Client;
@@ -204,6 +205,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 										$oNewContact->setExtendedProp('DavContacts::UID', $sUUID);
 										$bCreated = $oNewContact->save();
 										if ($bCreated) {
+											CTag::firstOrCreate(['UserId' => $oNewContact->IdUser, 'Storage' => $oNewContact->getStorageWithId()])->increment('CTag');
 											$oNewContact->addGroups(
 												isset($aContactData['GroupUUIDs']) ? $aContactData['GroupUUIDs'] : null,
 												isset($aContactData['GroupNames']) ? $aContactData['GroupNames'] : null,
