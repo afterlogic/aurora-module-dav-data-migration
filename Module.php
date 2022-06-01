@@ -179,7 +179,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 									$oVCard = Reader::read($aVCard['data']);
 									$aContactData = Helper::GetContactDataFromVcard($oVCard, $sUUID);
 
-									$aContactData['Storage'] = $bIsDefault ? StorageType::Personal : StorageType::AddressBook . $oAddressBook->Id;
+									$aContactData['Storage'] = $bIsDefault ? StorageType::Personal : StorageType::AddressBook . '-' . $oAddressBook->Id;
 
 //									ContactsModule::Decorator()->CreateContact($aContactData, $oAccount->IdUser);
 									$oUser = Api::getAuthenticatedUser();
