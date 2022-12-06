@@ -300,8 +300,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 
 					if ($creationResult) {
 						$sUserPublicId = Api::getUserPublicIdById($oAccount->IdUser);
-						Server::setUser($sUserPublicId);
-						$vCalendar = Server::getNodeForPath('calendars/' . $sCalendarId);
+						$vCalendar = Server::getNodeForPath('calendars/' . $sCalendarId, $sUserPublicId);
 						if ($vCalendar) {
 							$aEvents = $this->client->getEvents($calendar->Id);
 							foreach ($aEvents as $aEvent) {
