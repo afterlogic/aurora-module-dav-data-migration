@@ -7,6 +7,7 @@
 
 namespace Aurora\Modules\DavDataMigration;
 
+use Afterlogic\DAV\CalDAV\Calendar;
 use Afterlogic\DAV\Constants;
 use Afterlogic\DAV\Server;
 use Aurora\Api;
@@ -304,7 +305,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 						if ($vCalendar) {
 							$aEvents = $this->client->getEvents($calendar->Id);
 							foreach ($aEvents as $aEvent) {
-								if (!$vCalendar->childExists($aEvent['href'])) {
+								if ($vCalendar instanceof Calendar && !$vCalendar->childExists($aEvent['href'])) {
 									$vCalendar->createFile($aEvent['href'], $aEvent['data']);
 								}
 							}
