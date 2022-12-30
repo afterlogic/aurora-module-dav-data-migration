@@ -43,10 +43,6 @@ class Module extends \Aurora\System\Module\AbstractModule
 	
 	public $client = null;
 
-	public function __construct($sPath, $sVersion = '1.0') {
-		parent::__construct($sPath, $sVersion);
-	}
-
 	protected function getClient($oAccount = null) {
 		if (!isset($this->client)) {
 			if (!isset($oAccount)) {	
