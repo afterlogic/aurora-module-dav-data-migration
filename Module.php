@@ -24,7 +24,7 @@ use Aurora\Modules\Mail\Models\MailAccount;
 use Aurora\Modules\Mail\Module as MailModule;
 use Illuminate\Support\Facades\DB;
 use Sabre\VObject\Reader;
-use \Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Database\Capsule\Manager as Capsule;
 
 use function Sabre\Uri\split;
 
@@ -39,336 +39,332 @@ use function Sabre\Uri\split;
  */
 class Module extends \Aurora\System\Module\AbstractModule
 {
-	protected $aRequireModules = ['Calendar', 'Contacts'];
-	
-	public $client = null;
+    protected $aRequireModules = ['Calendar', 'Contacts'];
 
-	protected function getClient($oAccount = null) {
-		if (!isset($this->client)) {
-			if (!isset($oAccount)) {	
-				$sUserPublicId = Api::getAuthenticatedUserPublicId();
-				$oAccount = CoreModule::getInstance()->GetAccountUsedToAuthorize($sUserPublicId);
-			}
-			if ($oAccount) {
-				$sLogin = $oAccount->getLogin();
-				$sPassword = $oAccount->getPassword();
-				$sUrl = $this->getConfig('DavServerUrl');
-				
-				$this->client = new Client($sUrl, $sLogin, $sPassword);
-			}
-		}
+    public $client = null;
 
-		return $this->client;
-	}
+    protected function getClient($oAccount = null)
+    {
+        if (!isset($this->client)) {
+            if (!isset($oAccount)) {
+                $sUserPublicId = Api::getAuthenticatedUserPublicId();
+                $oAccount = CoreModule::getInstance()->GetAccountUsedToAuthorize($sUserPublicId);
+            }
+            if ($oAccount) {
+                $sLogin = $oAccount->getLogin();
+                $sPassword = $oAccount->getPassword();
+                $sUrl = $this->getConfig('DavServerUrl');
 
-	protected function getHrefValue($aElements) {
-		$sValue = null;
-	
-		foreach ($aElements as $aElement) {
-			if ($aElement['name'] === '{DAV:}href') {
-				$sValue = \trim($aElement['value'], '');
-				break;
-			}
-		}
-	
-		return $sValue;
-	}
+                $this->client = new Client($sUrl, $sLogin, $sPassword);
+            }
+        }
 
-	protected function getCurrentPrincipalUri() {
-		$mResult = '';
-		if (isset($this->client)) {
+        return $this->client;
+    }
 
-			$mResult = $this->getHrefValue(
-				$this->client->GetCurrentPrincipal()
-			);
-		}
+    protected function getHrefValue($aElements)
+    {
+        $sValue = null;
 
-		return $mResult;
-	}
+        foreach ($aElements as $aElement) {
+            if ($aElement['name'] === '{DAV:}href') {
+                $sValue = \trim($aElement['value'], '');
+                break;
+            }
+        }
 
-	protected function migrateContacts($sPrincipalUri, $oAccount) {
-		if (isset($sPrincipalUri)) {
-			$abHomeSet = $this->getHrefValue(
-				$this->client->GetAddressBookHomeSet($sPrincipalUri)
-			);
-			if (isset($abHomeSet)) {
-				$aBooks = $this->client->GetAddressBooks($abHomeSet);
-				
-				foreach ($aBooks as $key => $props) {
-					if ($props['{DAV:}resourcetype']->is('{'.\Sabre\CardDAV\Plugin::NS_CARDDAV.'}addressbook')) {
-						list(, $sAddressBookId) = split($key);
-						$sAddressBookId = rawurldecode($sAddressBookId);
-						$bIsDefault = false;
-						if ($sAddressBookId === 'default') {
-							
-							$sAddressBookId = \Afterlogic\DAV\Constants::ADDRESSBOOK_DEFAULT_NAME;
-							$bIsDefault = true;
+        return $sValue;
+    }
 
-							$oAddressBook = DavContactsModule::Decorator()->getManager()->getAddressBook(
-								$oAccount->IdUser, 
-								$sAddressBookId
-							);
+    protected function getCurrentPrincipalUri()
+    {
+        $mResult = '';
+        if (isset($this->client)) {
+            $mResult = $this->getHrefValue(
+                $this->client->GetCurrentPrincipal()
+            );
+        }
 
-							if (!$oAddressBook) {
-								try {
-									DavContactsModule::Decorator()->getManager()->createAddressBook(
-										$oAccount->IdUser, 
-										$sAddressBookId,
-										\Afterlogic\DAV\Constants::ADDRESSBOOK_DEFAULT_DISPLAY_NAME
-									);
-								} catch (\PDOException $oEx) {}							
-							}
-						} else {
+        return $mResult;
+    }
 
-							$oAddressBook = ContactsModule::Decorator()->GetAddressBook(
-								$oAccount->IdUser, 
-								$sAddressBookId
-							);
+    protected function migrateContacts($sPrincipalUri, $oAccount)
+    {
+        if (isset($sPrincipalUri)) {
+            $abHomeSet = $this->getHrefValue(
+                $this->client->GetAddressBookHomeSet($sPrincipalUri)
+            );
+            if (isset($abHomeSet)) {
+                $aBooks = $this->client->GetAddressBooks($abHomeSet);
 
-							if (!$oAddressBook) {
-								try {
-									ContactsModule::Decorator()->CreateAddressBook(
-										$props['{DAV:}displayname'],
-										$oAccount->IdUser, 
-										$sAddressBookId
-									);
-								} catch (\PDOException $oEx) {}	
-								
-								$oAddressBook = ContactsModule::Decorator()->GetAddressBook(
-									$oAccount->IdUser, 
-									$sAddressBookId
-								);
-							}
-						}
+                foreach ($aBooks as $key => $props) {
+                    if ($props['{DAV:}resourcetype']->is('{'.\Sabre\CardDAV\Plugin::NS_CARDDAV.'}addressbook')) {
+                        list(, $sAddressBookId) = split($key);
+                        $sAddressBookId = rawurldecode($sAddressBookId);
+                        $bIsDefault = false;
+                        if ($sAddressBookId === 'default') {
+                            $sAddressBookId = \Afterlogic\DAV\Constants::ADDRESSBOOK_DEFAULT_NAME;
+                            $bIsDefault = true;
 
-						$oDavAddressBook = DavContactsModule::Decorator()->getManager()->getAddressBook(
-							$oAccount->IdUser, 
-							$sAddressBookId
-						);
+                            $oAddressBook = DavContactsModule::Decorator()->getManager()->getAddressBook(
+                                $oAccount->IdUser,
+                                $sAddressBookId
+                            );
 
-						$aVCardsInfo = $this->client->GetVcardsInfo($key);
-						$aVCardUrls = [];
-						foreach ($aVCardsInfo as $aVCardInfo) {
-							$sHref = $aVCardInfo['href'];
-							$aVCardUrls[] = $key . $sHref;
-						}
+                            if (!$oAddressBook) {
+                                try {
+                                    DavContactsModule::Decorator()->getManager()->createAddressBook(
+                                        $oAccount->IdUser,
+                                        $sAddressBookId,
+                                        \Afterlogic\DAV\Constants::ADDRESSBOOK_DEFAULT_DISPLAY_NAME
+                                    );
+                                } catch (\PDOException $oEx) {
+                                }
+                            }
+                        } else {
+                            $oAddressBook = ContactsModule::Decorator()->GetAddressBook(
+                                $oAccount->IdUser,
+                                $sAddressBookId
+                            );
 
-//						$aVCards = $this->client->GetVcards($key, $aVCardUrls);
+                            if (!$oAddressBook) {
+                                try {
+                                    ContactsModule::Decorator()->CreateAddressBook(
+                                        $props['{DAV:}displayname'],
+                                        $oAccount->IdUser,
+                                        $sAddressBookId
+                                    );
+                                } catch (\PDOException $oEx) {
+                                }
 
-						$aChunks = array_chunk($aVCardUrls, 200);
-						foreach ($aChunks as $aVCardUrls) {
+                                $oAddressBook = ContactsModule::Decorator()->GetAddressBook(
+                                    $oAccount->IdUser,
+                                    $sAddressBookId
+                                );
+                            }
+                        }
 
-							$aVCards = $this->client->GetVcards($key, $aVCardUrls);
-							foreach ($aVCards as $aVCard) {
+                        $oDavAddressBook = DavContactsModule::Decorator()->getManager()->getAddressBook(
+                            $oAccount->IdUser,
+                            $sAddressBookId
+                        );
 
-								$sHref = $aVCard['href'];
-								$aVCardUrls[] = $key . $sHref;
-								$aPathInfo = pathinfo($sHref);
-								$sUUID = $aPathInfo['filename'];
-								$oQuery = Contact::where('IdUser', $oAccount->IdUser)
-									->where('UUID', $sUUID);
-								if (!$bIsDefault) {
-									$oQuery = $oQuery->where('AddressBookId', $oAddressBook->Id);
-								}
-								
-								if (!$oQuery->exists()) {
+                        $aVCardsInfo = $this->client->GetVcardsInfo($key);
+                        $aVCardUrls = [];
+                        foreach ($aVCardsInfo as $aVCardInfo) {
+                            $sHref = $aVCardInfo['href'];
+                            $aVCardUrls[] = $key . $sHref;
+                        }
 
-									$oVCard = Reader::read($aVCard['data']);
-									$aContactData = Helper::GetContactDataFromVcard($oVCard, $sUUID);
+                        //						$aVCards = $this->client->GetVcards($key, $aVCardUrls);
 
-									$aContactData['Storage'] = $bIsDefault ? StorageType::Personal : StorageType::AddressBook . '-' . $oAddressBook->Id;
+                        $aChunks = array_chunk($aVCardUrls, 200);
+                        foreach ($aChunks as $aVCardUrls) {
+                            $aVCards = $this->client->GetVcards($key, $aVCardUrls);
+                            foreach ($aVCards as $aVCard) {
+                                $sHref = $aVCard['href'];
+                                $aVCardUrls[] = $key . $sHref;
+                                $aPathInfo = pathinfo($sHref);
+                                $sUUID = $aPathInfo['filename'];
+                                $oQuery = Contact::where('IdUser', $oAccount->IdUser)
+                                    ->where('UUID', $sUUID);
+                                if (!$bIsDefault) {
+                                    $oQuery = $oQuery->where('AddressBookId', $oAddressBook->Id);
+                                }
 
-//									ContactsModule::Decorator()->CreateContact($aContactData, $oAccount->IdUser);
-									$oUser = Api::getAuthenticatedUser();
-									$oNewContact = new Contact();
-									$oNewContact->IdUser = $oUser->Id;
-									$oNewContact->IdTenant = $oUser->IdTenant;
-									$oNewContact->populate($aContactData, true);
+                                if (!$oQuery->exists()) {
+                                    $oVCard = Reader::read($aVCard['data']);
+                                    $aContactData = Helper::GetContactDataFromVcard($oVCard, $sUUID);
 
-									$bCreated = false;
+                                    $aContactData['Storage'] = $bIsDefault ? StorageType::Personal : StorageType::AddressBook . '-' . $oAddressBook->Id;
 
-									Capsule::schema()->getConnection()->beginTransaction();
+                                    //									ContactsModule::Decorator()->CreateContact($aContactData, $oAccount->IdUser);
+                                    $oUser = Api::getAuthenticatedUser();
+                                    $oNewContact = new Contact();
+                                    $oNewContact->IdUser = $oUser->Id;
+                                    $oNewContact->IdTenant = $oUser->IdTenant;
+                                    $oNewContact->populate($aContactData, true);
 
-									$oQuery = Contact::where('IdUser', $oNewContact->IdUser)
-										->where('UUID', $sUUID);
-					
-									if (!$oNewContact->Storage === StorageType::AddressBook) {
-										$oQuery = $oQuery->where('AddressBookId', $oNewContact->AddressBookId);
-									}
-									$oContact = $oQuery->lockForUpdate()->first();
-									if (!$oContact) {
-										$oNewContact->DateModified = date('Y-m-d H:i:s');
-										$oNewContact->calculateETag();
-										$oNewContact->setExtendedProp('DavContacts::UID', $sUUID);
-										$bCreated = $oNewContact->save();
-										if ($bCreated) {
-											CTag::firstOrCreate(['UserId' => $oNewContact->IdUser, 'Storage' => $oNewContact->getStorageWithId()])->increment('CTag');
-											$oNewContact->addGroups(
-												isset($aContactData['GroupUUIDs']) ? $aContactData['GroupUUIDs'] : null,
-												isset($aContactData['GroupNames']) ? $aContactData['GroupNames'] : null,
-												true
-											);
+                                    $bCreated = false;
 
-										}
-									}
+                                    Capsule::schema()->getConnection()->beginTransaction();
 
-									Capsule::schema()->getConnection()->commit();
+                                    $oQuery = Contact::where('IdUser', $oNewContact->IdUser)
+                                        ->where('UUID', $sUUID);
 
-									if ($bCreated && $oNewContact && $oDavAddressBook) {
-										try {
-											$oDavAddressBook->createFile($oNewContact->UUID . '.vcf', $aVCard['data']);
-										} catch (\PDOException $oEx) {}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
+                                    if (!$oNewContact->Storage === StorageType::AddressBook) {
+                                        $oQuery = $oQuery->where('AddressBookId', $oNewContact->AddressBookId);
+                                    }
+                                    $oContact = $oQuery->lockForUpdate()->first();
+                                    if (!$oContact) {
+                                        $oNewContact->DateModified = date('Y-m-d H:i:s');
+                                        $oNewContact->calculateETag();
+                                        $oNewContact->setExtendedProp('DavContacts::UID', $sUUID);
+                                        $bCreated = $oNewContact->save();
+                                        if ($bCreated) {
+                                            CTag::firstOrCreate(['UserId' => $oNewContact->IdUser, 'Storage' => $oNewContact->getStorageWithId()])->increment('CTag');
+                                            $oNewContact->addGroups(
+                                                isset($aContactData['GroupUUIDs']) ? $aContactData['GroupUUIDs'] : null,
+                                                isset($aContactData['GroupNames']) ? $aContactData['GroupNames'] : null,
+                                                true
+                                            );
+                                        }
+                                    }
 
-	protected function getDefaultCalendar($iUserId) {
-		
-		$mResult = false;
-		$oCalendarDecorator = CalendarModule::Decorator();
-		if ($oCalendarDecorator) {
-			$aCalendars = $oCalendarDecorator->GetCalendars($iUserId);
-			foreach ($aCalendars['Calendars'] as $oCalendar) {
-				if (\substr($oCalendar->Id, 0, \strlen(Constants::CALENDAR_DEFAULT_UUID)) === Constants::CALENDAR_DEFAULT_UUID) {
-					$mResult = $oCalendar;
-					break;
-				}
-			}
-		}
+                                    Capsule::schema()->getConnection()->commit();
 
-		return $mResult;
-	}
-	
-	protected function migrateCalendars($sPrincipalUri, $oAccount) {
-		$oCalendarDecorator = CalendarModule::Decorator();
-		if ($oCalendarDecorator && isset($sPrincipalUri)) {
-	
-			$calHomeSet = $this->getHrefValue(
-				$this->client->GetCalendarHomeSet($sPrincipalUri)
-			);
-			if (isset($calHomeSet)) {
+                                    if ($bCreated && $oNewContact && $oDavAddressBook) {
+                                        try {
+                                            $oDavAddressBook->createFile($oNewContact->UUID . '.vcf', $aVCard['data']);
+                                        } catch (\PDOException $oEx) {
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-				$aCalendars = $this->client->getCalendars($calHomeSet);
-				
-				foreach ($aCalendars as $calendar) {
+    protected function getDefaultCalendar($iUserId)
+    {
+        $mResult = false;
+        $oCalendarDecorator = CalendarModule::Decorator();
+        if ($oCalendarDecorator) {
+            $aCalendars = $oCalendarDecorator->GetCalendars($iUserId);
+            foreach ($aCalendars['Calendars'] as $oCalendar) {
+                if (\substr($oCalendar->Id, 0, \strlen(Constants::CALENDAR_DEFAULT_UUID)) === Constants::CALENDAR_DEFAULT_UUID) {
+                    $mResult = $oCalendar;
+                    break;
+                }
+            }
+        }
 
-					list(, $sCalendarId) = split($calendar->Id);
-					$sCalendarId = rawurldecode($sCalendarId);
-					if ($sCalendarId === 'default') {
-						$oCalendar = $this->getDefaultCalendar($oAccount->IdUser);
-						if ($oCalendar) {
-							$sCalendarId = $oCalendar->Id;
-						}
-					} else {
-						$oCalendar = $oCalendarDecorator->GetCalendar(
-							$oAccount->IdUser, 
-							$sCalendarId
-						);
-					}
+        return $mResult;
+    }
 
-					$creationResult = false;
+    protected function migrateCalendars($sPrincipalUri, $oAccount)
+    {
+        $oCalendarDecorator = CalendarModule::Decorator();
+        if ($oCalendarDecorator && isset($sPrincipalUri)) {
+            $calHomeSet = $this->getHrefValue(
+                $this->client->GetCalendarHomeSet($sPrincipalUri)
+            );
+            if (isset($calHomeSet)) {
+                $aCalendars = $this->client->getCalendars($calHomeSet);
 
-					if (!$oCalendar) {
-						$creationResult = $oCalendarDecorator->CreateCalendar(
-							$oAccount->IdUser, 
-							$calendar->DisplayName, 
-							$calendar->Description, 
-							$calendar->Color, 
-							$sCalendarId
-						);
-						if (!empty($calendar->Shares)) {
-							$oCalendarDecorator->UpdateCalendarShare(
-								$oAccount->IdUser, 
-								$sCalendarId, 
-								false, 
-								\json_encode($calendar->Shares)
-							);
-						}
-						
-					} else {
-						$creationResult = true;
-					}
+                foreach ($aCalendars as $calendar) {
+                    list(, $sCalendarId) = split($calendar->Id);
+                    $sCalendarId = rawurldecode($sCalendarId);
+                    if ($sCalendarId === 'default') {
+                        $oCalendar = $this->getDefaultCalendar($oAccount->IdUser);
+                        if ($oCalendar) {
+                            $sCalendarId = $oCalendar->Id;
+                        }
+                    } else {
+                        $oCalendar = $oCalendarDecorator->GetCalendar(
+                            $oAccount->IdUser,
+                            $sCalendarId
+                        );
+                    }
 
-					if ($creationResult) {
-						$sUserPublicId = Api::getUserPublicIdById($oAccount->IdUser);
-						$vCalendar = Server::getNodeForPath('calendars/' . $sCalendarId, $sUserPublicId);
-						if ($vCalendar) {
-							$aEvents = $this->client->getEvents($calendar->Id);
-							foreach ($aEvents as $aEvent) {
-								if ($vCalendar instanceof Calendar && !$vCalendar->childExists($aEvent['href'])) {
-									$vCalendar->createFile($aEvent['href'], $aEvent['data']);
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
+                    $creationResult = false;
 
-	public function init() 
-	{
-	}
+                    if (!$oCalendar) {
+                        $creationResult = $oCalendarDecorator->CreateCalendar(
+                            $oAccount->IdUser,
+                            $calendar->DisplayName,
+                            $calendar->Description,
+                            $calendar->Color,
+                            $sCalendarId
+                        );
+                        if (!empty($calendar->Shares)) {
+                            $oCalendarDecorator->UpdateCalendarShare(
+                                $oAccount->IdUser,
+                                $sCalendarId,
+                                false,
+                                \json_encode($calendar->Shares)
+                            );
+                        }
+                    } else {
+                        $creationResult = true;
+                    }
 
-	public function GetSettings()
-	{
-		\Aurora\System\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::NormalUser);
-		$mResult = [
-			'Migrated' => false
-		];
-		$oUser = Api::getAuthenticatedUser();
-		if ($oUser && $oUser->{$this->GetName() . '::Migrated'}) {
-			$mResult['Migrated'] = true;
-		}
+                    if ($creationResult) {
+                        $sUserPublicId = Api::getUserPublicIdById($oAccount->IdUser);
+                        $vCalendar = Server::getNodeForPath('calendars/' . $sCalendarId, $sUserPublicId);
+                        if ($vCalendar) {
+                            $aEvents = $this->client->getEvents($calendar->Id);
+                            foreach ($aEvents as $aEvent) {
+                                if ($vCalendar instanceof Calendar && !$vCalendar->childExists($aEvent['href'])) {
+                                    $vCalendar->createFile($aEvent['href'], $aEvent['data']);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-		return $mResult;
-	}
+    public function init()
+    {
+    }
 
-	public function Migrate()
-	{
-		$mResult = false;
+    public function GetSettings()
+    {
+        \Aurora\System\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::NormalUser);
+        $mResult = [
+            'Migrated' => false
+        ];
+        $oUser = Api::getAuthenticatedUser();
+        if ($oUser && $oUser->{$this->GetName() . '::Migrated'}) {
+            $mResult['Migrated'] = true;
+        }
 
-		$oUser = Api::getAuthenticatedUser();
-		if ($oUser && !$oUser->{$this->GetName() . '::Migrated'}) {
+        return $mResult;
+    }
 
-			$oAccount = CoreModule::getInstance()->GetAccountUsedToAuthorize($oUser->PublicId);
+    public function Migrate()
+    {
+        $mResult = false;
 
-			if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
-				if (empty($this->getConfig('DavServerUrl', ''))) {
-					Api::Log('The DavDataMigration module is not configured properly');
-				} else {
-					$this->getClient($oAccount);
-					try {
-						$sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
-					} catch (\Sabre\HTTP\ClientHttpException $oEx) {
-						Api::Log('Can\'t connect to the following DAV server: ' . $this->getConfig('DavServerUrl'));
+        $oUser = Api::getAuthenticatedUser();
+        if ($oUser && !$oUser->{$this->GetName() . '::Migrated'}) {
+            $oAccount = CoreModule::getInstance()->GetAccountUsedToAuthorize($oUser->PublicId);
 
-						return false;
-					}
-					try {
-						$prev = Api::skipCheckUserRole(true);
+            if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
+                if (empty($this->getConfig('DavServerUrl', ''))) {
+                    Api::Log('The DavDataMigration module is not configured properly');
+                } else {
+                    $this->getClient($oAccount);
+                    try {
+                        $sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
+                    } catch (\Sabre\HTTP\ClientHttpException $oEx) {
+                        Api::Log('Can\'t connect to the following DAV server: ' . $this->getConfig('DavServerUrl'));
 
-						$this->migrateCalendars($sCurrentPrincipalUri, $oAccount);
+                        return false;
+                    }
+                    try {
+                        $prev = Api::skipCheckUserRole(true);
 
-						$this->migrateContacts($sCurrentPrincipalUri, $oAccount);
+                        $this->migrateCalendars($sCurrentPrincipalUri, $oAccount);
 
-						Api::skipCheckUserRole($prev);
-						$oUser->setExtendedProp($this->GetName() . '::Migrated', true);
-						$oUser->save();
-						$mResult = true;
-					} catch (\Exception $oEx) {
-						Api::LogException($oEx);
-					}
-				}
-			}
-		}
+                        $this->migrateContacts($sCurrentPrincipalUri, $oAccount);
 
-		return $mResult;
-	}
+                        Api::skipCheckUserRole($prev);
+                        $oUser->setExtendedProp($this->GetName() . '::Migrated', true);
+                        $oUser->save();
+                        $mResult = true;
+                    } catch (\Exception $oEx) {
+                        Api::LogException($oEx);
+                    }
+                }
+            }
+        }
+
+        return $mResult;
+    }
 }
