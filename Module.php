@@ -43,6 +43,14 @@ class Module extends \Aurora\System\Module\AbstractModule
 
     public $client = null;
 
+    /**
+     * @return Module
+     */
+    public static function Decorator()
+    {
+        return parent::Decorator();
+    }
+
     protected function getClient($oAccount = null)
     {
         if (!isset($this->client)) {
@@ -202,6 +210,7 @@ class Module extends \Aurora\System\Module\AbstractModule
                                         $oNewContact->setExtendedProp('DavContacts::UID', $sUUID);
                                         $bCreated = $oNewContact->save();
                                         if ($bCreated) {
+                                            /* @phpstan-ignore-next-line */
                                             CTag::firstOrCreate(['UserId' => $oNewContact->IdUser, 'Storage' => $oNewContact->getStorageWithId()])->increment('CTag');
                                             $oNewContact->addGroups(
                                                 isset($aContactData['GroupUUIDs']) ? $aContactData['GroupUUIDs'] : null,
