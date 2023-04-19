@@ -35,6 +35,8 @@ use function Sabre\Uri\split;
  * @license https://afterlogic.com/products/common-licensing Afterlogic Software License
  * @copyright Copyright (c) 2023, Afterlogic Corp.
  *
+ * @property Settings $oModuleSettings
+ *
  * @package Modules
  */
 class Module extends \Aurora\System\Module\AbstractModule
@@ -70,7 +72,7 @@ class Module extends \Aurora\System\Module\AbstractModule
             if ($oAccount) {
                 $sLogin = $oAccount->getLogin();
                 $sPassword = $oAccount->getPassword();
-                $sUrl = $this->getConfig('DavServerUrl');
+                $sUrl = $this->oModuleSettings->DavServerUrl;
 
                 $this->client = new Client($sUrl, $sLogin, $sPassword);
             }
@@ -354,14 +356,14 @@ class Module extends \Aurora\System\Module\AbstractModule
             $oAccount = CoreModule::getInstance()->GetAccountUsedToAuthorize($oUser->PublicId);
 
             if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
-                if (empty($this->getConfig('DavServerUrl', ''))) {
+                if (empty($this->oModuleSettings->DavServerUrl)) {
                     Api::Log('The DavDataMigration module is not configured properly');
                 } else {
                     $this->getClient($oAccount);
                     try {
                         $sCurrentPrincipalUri = $this->getCurrentPrincipalUri();
                     } catch (\Sabre\HTTP\ClientHttpException $oEx) {
-                        Api::Log('Can\'t connect to the following DAV server: ' . $this->getConfig('DavServerUrl'));
+                        Api::Log('Can\'t connect to the following DAV server: ' . $this->oModuleSettings->DavServerUrl);
 
                         return false;
                     }
