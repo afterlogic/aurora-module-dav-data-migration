@@ -228,7 +228,6 @@ class Module extends \Aurora\System\Module\AbstractModule
                                         $oNewContact->setExtendedProp('DavContacts::UID', $sUUID);
                                         $bCreated = $oNewContact->save();
                                         if ($bCreated) {
-                                            /* @phpstan-ignore-next-line */
                                             CTag::firstOrCreate(['UserId' => $oNewContact->IdUser, 'Storage' => $oNewContact->getStorageWithId()])->increment('CTag');
                                             $oNewContact->addGroups(
                                                 isset($aContactData['GroupUUIDs']) ? $aContactData['GroupUUIDs'] : null,
