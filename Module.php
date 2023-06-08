@@ -346,7 +346,7 @@ class Module extends \Aurora\System\Module\AbstractModule
             'Migrated' => false
         ];
         $oUser = Api::getAuthenticatedUser();
-        if ($oUser && $oUser->{$this->GetName() . '::Migrated'}) {
+        if ($oUser && $oUser->getExtendedProp($this->GetName() . '::Migrated')) {
             $mResult['Migrated'] = true;
         }
 
@@ -358,7 +358,7 @@ class Module extends \Aurora\System\Module\AbstractModule
         $mResult = false;
 
         $oUser = Api::getAuthenticatedUser();
-        if ($oUser && !$oUser->{$this->GetName() . '::Migrated'}) {
+        if ($oUser && !$oUser->getExtendedProp($this->GetName() . '::Migrated')) {
             $oAccount = CoreModule::getInstance()->GetAccountUsedToAuthorize($oUser->PublicId);
 
             if ($oAccount instanceof MailAccount && $oAccount->UseToAuthorize) {
