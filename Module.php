@@ -124,7 +124,7 @@ class Module extends \Aurora\System\Module\AbstractModule
                 $aBooks = $this->client->GetAddressBooks($abHomeSet);
 
                 foreach ($aBooks as $key => $props) {
-                    if ($props['{DAV:}resourcetype']->is('{'.\Sabre\CardDAV\Plugin::NS_CARDDAV.'}addressbook')) {
+                    if ($props['{DAV:}resourcetype']->is('{' . \Sabre\CardDAV\Plugin::NS_CARDDAV . '}addressbook')) {
                         list(, $sAddressBookId) = split($key);
                         $sAddressBookId = rawurldecode($sAddressBookId);
                         $bIsDefault = false;
@@ -335,9 +335,7 @@ class Module extends \Aurora\System\Module\AbstractModule
         }
     }
 
-    public function init()
-    {
-    }
+    public function init() {}
 
     public function GetSettings()
     {
